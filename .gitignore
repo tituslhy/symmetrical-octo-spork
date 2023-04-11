@@ -1,5 +1,7 @@
 PyTorchEnv/
 activate.sh
+Notebooks/Models/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
