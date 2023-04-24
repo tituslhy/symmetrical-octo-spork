@@ -1,5 +1,6 @@
-import torch
 from tqdm.notebook import tqdm
+from pathlib import Path
+import torch
 
 def get_device():
     """Detects accelerator device. The possible devices are:
@@ -186,3 +187,18 @@ def make_predictions(model:torch.nn.Module,
     
     #Stack pred_probs in list into tensor
     return torch.stack(pred_probs)
+
+def save_model(root_dir: str,
+               model_name: str,
+               model: torch.nn.Module):
+    
+
+    MODEL_PATH = Path(root_dir)
+    MODEL_PATH.mkdir(parents=True,
+                     exist_ok = True)
+    MODEL_NAME = model_name
+    MODEL_SAVE_PATH = MODEL_PATH / MODEL_NAME
+
+    torch.save(obj = model.state_dict(),
+            f = MODEL_SAVE_PATH)
+    print(f"Saved model to: {MODEL_SAVE_PATH}")
