@@ -155,3 +155,34 @@ def eval_model(model: torch.nn.Module,
     return {"model_name": model.__class__.__name__,
             "model_loss": loss.item(),
             "model_acc": acc}
+
+def make_predictions(model:torch.nn.Module,
+                     data:list,
+                     device: torch.device):
+    """Generates a list of predictions given a list of data
+
+    Args:
+        model (torch.nn.Module): Model instance
+        data (list): List of img tensors to run inference
+        device (torch.device, optional): Defaults to device.
+
+    Returns:
+        _type_: _description_
+    """
+    pred_probs = []
+    model.eval()
+    with torch.inference_mode():
+        for sample in data:
+            # Prep sample - add the batch dimension and pass to device
+            sample = torch.unsqueeze(sample, dim=0).to(device)
+            
+            # Forward pass
+            pred_logit = model(sample)
+            
+            #Get prediction orobability
+            pred_prob = torch.softmax(pred_logit.squeeze(), dim = 0)
+            
+            pred_probs.append(pred_prob.cpu())
+    
+    #Stack pred_probs in list into tensor
+    return torch.stack(pred_probs)
