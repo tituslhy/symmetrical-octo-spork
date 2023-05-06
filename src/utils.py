@@ -168,7 +168,7 @@ def make_predictions(model:torch.nn.Module,
         device (torch.device, optional): Defaults to device.
 
     Returns:
-        _type_: _description_
+        torch.tensor: Tensor of probabilities
     """
     pred_probs = []
     model.eval()
