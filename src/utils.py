@@ -1,5 +1,9 @@
-from tqdm.notebook import tqdm
+import os
 from pathlib import Path
+from typing import Tuple, Dict, List
+from tqdm.notebook import tqdm
+
+from PIL import Image
 import torch
 
 def get_device():
@@ -207,3 +211,47 @@ def save_model(root_dir: str,
     torch.save(obj = model.state_dict(),
             f = MODEL_SAVE_PATH)
     print(f"Saved model to: {MODEL_SAVE_PATH}")
+
+def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
+    """Use os.scandir() to traverse a target directory and get class names
+    Turn class names into a dict and returns it
+    """
+    classes = sorted(entry.name for entry in list(os.scandir(directory)) if entry.is_dir())
+    if not classes:
+        raise FileNotFoundError(f"Could not find any classes in {directory}...\nPlease check file structure")
+    class_to_idx = {class_name:i for i, class_name in enumerate(classes)}
+    return classes, class_to_idx
+
+class ImageFolderCustom(torch.utils.data.Dataset):
+    """Custom dataset object
+    """
+    def __init__(self, target_directory: str = None, transform = None):
+        """Class constructor. Takes in a target directory filepath and
+        optionally a torch transform.
+        """
+        self.transform = transform
+        self.classes, self.class_to_idx = find_classes(target_directory)
+        self.paths = list(Path(target_directory).glob("*/*.jpg"))
+    def load_image(self, index: int) -> Image.Image:
+        """Opens an image given a path and returns it
+        """
+        image_path = self.paths[index]
+        return Image.open(image_path)
+    def __len__(self):
+        """Returns total number of samples
+        """
+        return len(self.paths)
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
+        """Overrides __getitem__ method to return a particular sample
+        Returns one sample of data -> X and y. If a transform is specified,
+        returns the transformed image and label. Otherwise, just returns
+        original image and label.
+        """
+        img = self.load_image(index)
+        class_name = self.paths[index].parent.name
+        class_idx = self.class_to_idx[class_name]
+        
+        if self.transform:
+            return self.transform(img), class_idx
+        else:
+            return img, class_idx
