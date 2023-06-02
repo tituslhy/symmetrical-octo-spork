@@ -2,9 +2,11 @@ import os
 from pathlib import Path
 from typing import Tuple, Dict, List
 from tqdm.notebook import tqdm
+from collections import defaultdict
 
 from PIL import Image
 import torch
+from torch import nn
 
 def get_device():
     """Detects accelerator device. The possible devices are:
@@ -33,137 +35,149 @@ def print_train_time(start: float,
     total_time = end - start
     print(f"Train time on {device}: {total_time:.3f} seconds")
 
-def train_step(model: torch.nn.Module, 
+def train_step(model: torch.nn.Module,
                dataloader: torch.utils.data.DataLoader,
                loss_fn: torch.nn.Module,
                optimizer: torch.optim.Optimizer,
-               device: torch.device,
-               accuracy_fn = None):
-    """Trains the model for each epoch
+               device: str = get_device()) -> Tuple[float, float]:
+    """Helper function to train pytorch model on device
+    and acquire training metrics per epoch
 
     Args:
-        model (torch.nn.Module): Instantiated model object
-        dataloader (torch.utils.data.Dataloader): Instantiated dataloader object
-        optimizer (torch.optim.Optimizer): Optimizer function
-        device (str): Device that the model is placed on.
-        accuracy_fn: A defined function to compute classification accuracy. 
-                    Defaults to "None"
+        model (torch.nn.Module): instantiated torch model
+        dataloader (torch.utils.data.DataLoader)
+        loss_fn (torch.nn.Module)
+        optimizer (torch.optim.Optimizer) 
+        device (str, optional): Defaults to device.
+
+    Returns:
+        Average training loss and training accuracy per epoch
     """
-    model.train()
-    train_acc, train_loss = 0, 0
     
-    for batch, (X, y) in enumerate(tqdm(dataloader)):
-        X, y = X.to(device), y.to(device)
+    train_loss, train_acc = 0,0
+    model.train()
+
+    for batch, (X, y) in enumerate(dataloader):
         
         # Forward pass
-        y_pred = model(X)
-        
-        # Calculate loss
+        X, y = X.to(device), y.to(device)
+        y_pred = model(X) #logits
         loss = loss_fn(y_pred, y)
-        train_loss += loss #accumulate train loss
-        
-        if accuracy_fn is not None:
-            train_acc += accuracy_fn(y_true = y,
-                                     y_pred = y_pred.argmax(dim=1) #logits to pred labels
-                                     )
-        
-        # Optimizer zero grad
+        train_loss += loss.item()
+
+        # Backpropagation
         optimizer.zero_grad()
-        
-        # Loss backward
         loss.backward()
-        
-        # Optimizer step
         optimizer.step()
+
+        # Compute metric across all batches
+        y_pred_class = torch.argmax(
+            torch.softmax(y_pred, dim = 1),
+            dim = 1
+        )
+
+        train_acc += (y_pred_class==y).sum().item()/len(y_pred)
     
-    train_loss/=len(dataloader)
-    
-    if train_acc != 0:
-        train_acc/=len(dataloader)
-        print(f"Train loss: {train_loss:.5f} | Train acc: {train_acc:.2f}%")
-    
-    else:
-        print(f"Train loss: {train_loss:.5f}")
+    # Adjust metrics to get average loss and accuracy per batch
+    train_loss = train_loss / len(dataloader)
+    train_acc = train_acc/len(dataloader)
+
+    return train_loss, train_acc
 
 def test_step(model: torch.nn.Module,
               dataloader: torch.utils.data.DataLoader,
               loss_fn: torch.nn.Module,
-              device: torch.device,
-              accuracy_fn = None,):
-    """Performs a testing loop step using model on dataloader
+              device: str = get_device()) -> Tuple[float, float]:
+    """Runs inference of trained model on test dataset per epoch
+    and monitors model test metrics.
 
     Args:
-        model (torch.nn.Module): Instantiated model object
-        dataloader (torch.utils.data.Dataloader): Instantiated dataloader object
-        device (str): Device that the model is placed on. Defaults to torch.device.
-        accuracy_fn: A defined python function to compute classification accuracy. Defaults to "None"
+        model (torch.nn.Module): instantiated torch model
+        dataloader (torch.utils.data.DataLoader)
+        loss_fn (torch.nn.Module)
+        device (str, optional): Defaults to device.
+
+    Returns:
+        Average test loss and test accuracy per epoch
     """
-    test_loss, test_acc = 0, 0
     
+    test_loss, test_acc = 0,0
     model.eval()
     
     with torch.inference_mode():
-        for X, y in tqdm(dataloader):
-            X, y = X.to(device), y.to(device)
+        for batch, (X, y) in enumerate(dataloader):
             
             # Forward pass
-            test_pred = model(X)
-            
-            # Calculate loss and accuracy
-            test_loss += loss_fn(test_pred, y)
-            
-            if accuracy_fn is not None:
-                test_acc += accuracy_fn(y_true = y,
-                                        y_pred = test_pred.argmax(dim=1)
-                                        )
-            
-        # Adjust metrics
-        test_loss/=len(dataloader)
-        
-        if test_acc !=0:
-            test_acc/=len(dataloader)
-            print(f"Test loss: {test_loss:.5f} | Test acc: {test_acc:.2f}%")
-        
-        else:
-            print(f"Test loss: {test_loss:.5f}")
+            X, y = X.to(device), y.to(device)
+            test_pred = model(X) #logits
 
-def eval_model(model: torch.nn.Module,
-               data_loader: torch.utils.data.DataLoader,
-               loss_fn: torch.nn.Module,
-               accuracy_fn,
-               device: torch.device):
-    """Returns a dictionary containing the results of model predicting
-    on dataloader
+            # Compute metrics 
+            loss = loss_fn(test_pred, y)
+            test_loss += loss.item()
+            test_pred_class = torch.argmax(
+                torch.softmax(test_pred, dim = 1),
+                dim = 1
+            )
+            test_acc += (test_pred_class == y).sum().item()/len(test_pred_class)
+    
+    # Adjust metrics to get average loss and accuracy per batch
+    test_loss = test_loss/len(dataloader)
+    test_acc = test_acc/len(dataloader)
+    
+    return test_loss, test_acc
+
+
+def train(model: torch.nn.Module,
+          train_dataloader: torch.utils.data.DataLoader,
+          test_dataloader: torch.utils.data.DataLoader,
+          optimizer: torch.optim.Optimizer,
+          epochs: int,
+          loss_fn: torch.nn.Module = nn.CrossEntropyLoss(),) -> Dict(List):
+    """Wrapper function to train model over specified number of epochs,
+    model, dataloaders, optimizer and loss function.
 
     Args:
-        model (torch.nn.Module): _description_
-        loss_fn (torch.nn.Module): _description_
-        accuracy_fn (_type_): _description_
-        data_loader (_type_, optional): _description_. Defaults to torch.utils.data.DataLoader.
-    """
-    loss, acc = 0, 0
-    model.eval()
-    with torch.inference_mode():
-        for X, y in tqdm(data_loader):
-            X, y = X.to(device), y.to(device)
-            # Make preds
-            y_pred = model(X)
-            
-            # Accumulate the loss and acc values per batch
-            loss += loss_fn(y_pred, y)
-            acc += accuracy_fn(y_true = y,
-                               y_pred = y_pred.argmax(dim=1))
-        
-        loss/= len(data_loader)
-        acc /= len(data_loader)
-    
-    return {"model_name": model.__class__.__name__,
-            "model_loss": loss.item(),
-            "model_acc": acc}
+        model (torch.nn.Module): instantiated torch model
+        train_dataloader (torch.utils.data.DataLoader)
+        test_dataloader (torch.utils.data.DataLoader)
+        optimizer (torch.optim.Optimizer)
+        loss_fn (torch.nn.Module, optional) Defaults to nn.CrossEntropyLoss().
+        epochs (int): Number of epochs to train
 
-def make_predictions(model:torch.nn.Module,
-                     data:list,
-                     device: torch.device):
+    Returns:
+        Dictionary of results
+    """
+    
+    # Create storage results dictionary
+    results = defaultdict(list)
+
+    # Loop through training and testing steps for number of epochs
+    for epoch in tqdm(range(epochs)):
+        train_loss, train_acc = train_step(model = model,
+                                           dataloader = train_dataloader,
+                                           loss_fn = loss_fn,
+                                           optimizer = optimizer)
+        test_loss, test_acc = test_step(model = model,
+                                        dataloader = test_dataloader,
+                                        loss_fn = loss_fn)
+        print(
+            f"Epoch: {epoch+1} | "
+            f"train_loss: {train_loss:.4f} | "
+            f"train_acc: {train_acc:.4f} | "
+            f"test_loss: {test_loss:.4f} | "
+            f"test_acc: {test_acc:.4f}"
+        )
+
+        results["train_loss"].append(train_loss)
+        results["train_acc"].append(train_acc)
+        results["test_loss"].append(test_loss)
+        results["test_acc"].append(test_acc)
+    
+    return results
+
+def make_predictions_batch(model:torch.nn.Module,
+                           data:list,
+                           device: torch.device):
     """Generates a list of predictions given a list of data
 
     Args:
