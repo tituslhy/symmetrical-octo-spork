@@ -51,8 +51,8 @@ def train_step(model: torch.nn.Module,
         train_acc += (y_pred_class==y).sum().item()/len(y_pred)
     
     # Adjust metrics to get average loss and accuracy per batch
-    train_loss = train_loss / len(dataloader)
-    train_acc = train_acc/len(dataloader)
+    train_loss = train_loss.cpu() / len(dataloader)
+    train_acc = train_acc.cpu() /len(dataloader)
 
     return train_loss, train_acc
 
@@ -103,6 +103,7 @@ def train(model: torch.nn.Module,
           test_dataloader: torch.utils.data.DataLoader,
           optimizer: torch.optim.Optimizer,
           epochs: int,
+          device: str,
           loss_fn: torch.nn.Module = nn.CrossEntropyLoss()): 
     """Wrapper function to train model over specified number of epochs,
     model, dataloaders, optimizer and loss function.
@@ -127,10 +128,12 @@ def train(model: torch.nn.Module,
         train_loss, train_acc = train_step(model = model,
                                            dataloader = train_dataloader,
                                            loss_fn = loss_fn,
-                                           optimizer = optimizer)
+                                           optimizer = optimizer,
+                                           device = device)
         test_loss, test_acc = test_step(model = model,
                                         dataloader = test_dataloader,
-                                        loss_fn = loss_fn)
+                                        loss_fn = loss_fn,
+                                        device = device)
         print(
             f"Epoch: {epoch+1} | "
             f"train_loss: {train_loss:.4f} | "
