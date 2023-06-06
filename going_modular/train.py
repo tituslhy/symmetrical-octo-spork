@@ -56,12 +56,12 @@ if args.seed:
     SEED = args.seed
     torch.manual_seed(SEED)
 
-HIDDEN_UNITS = 20
+HIDDEN_UNITS = 10
 
 #Get data
 data_path = "data"
 image_dir = "pizza_steak_sushi"
-return_ = get_data.main(url,
+return_ = get_data.main(URL,
                         data_path,
                         image_dir)
 
@@ -71,6 +71,7 @@ test_dir = f"{data_path}/{image_dir}/test"
 
 #Get device
 device = get_device()
+# device = 'cuda'
 if device == "mps":
     torch.mps.manual_seed(SEED)
 elif device == 'cuda':
@@ -78,7 +79,7 @@ elif device == 'cuda':
 
 #Create transforms
 data_transform = transforms.Compose([
-    transforms.Resize((64,64)),
+    transforms.Resize(size = (64,64)),
     transforms.ToTensor()
 ])
 
@@ -92,8 +93,8 @@ train_dataloader, test_dataloader, class_names = data_setup.create_dataloaders(
 )
 
 #Create model
-model = model_builder.TinyVGG2(
-    num_color_channels = 3,
+model = model_builder.TinyVGG(
+    num_channels = 3,
     hidden_units = HIDDEN_UNITS,
     num_classes = 3
 ).to(device)
@@ -118,6 +119,6 @@ print(f"Total training time: {end_time - start_time:.3f} seconds")
 #Save model to file
 utils.save_model(model = model,
                  root_dir = "models",
-                 model_name = "tinyVGG2_pizza_steak_sushi.pth")
+                 model_name = "05_tinyVGG2_pizza_steak_sushi.pth")
 
-print("Model saved in models directory as tinyVGG2_pizza_steak_sushi.pth")
+print("Model saved in models directory as 05_tinyVGG_pizza_steak_sushi.pth")

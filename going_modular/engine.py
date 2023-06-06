@@ -51,8 +51,8 @@ def train_step(model: torch.nn.Module,
         train_acc += (y_pred_class==y).sum().item()/len(y_pred)
     
     # Adjust metrics to get average loss and accuracy per batch
-    train_loss = train_loss.cpu() / len(dataloader)
-    train_acc = train_acc.cpu() /len(dataloader)
+    train_loss = train_loss / len(dataloader)
+    train_acc = train_acc /len(dataloader)
 
     return train_loss, train_acc
 

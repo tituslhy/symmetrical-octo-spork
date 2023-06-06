@@ -69,9 +69,7 @@ class TinyVGG(nn.Module):
         return self.classifier(self.conv_block_2(self.conv_block_1(x))) # <- leverage the benefits of operator fusion
 
 class TinyVGG2(nn.Module):
-  def __init__(self, num_color_channels: int, 
-               hidden_units: int, 
-               num_classes: int):
+  def __init__(self, num_color_channels: int, hidden_units: int, num_classes: int):
     super().__init__()
     self.conv_block_1 = nn.Sequential(
         nn.Conv2d(in_channels = num_color_channels,
