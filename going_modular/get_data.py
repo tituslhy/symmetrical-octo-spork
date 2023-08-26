@@ -5,9 +5,9 @@ from pathlib import Path
 import requests
 import zipfile
 
-def main(url: str,
-         data_path: str = "data",
-         image_dir: str = "pizza_steak_sushi"):
+def get_data(url: str,
+             data_path: str = "data",
+             image_dir: str = "pizza_steak_sushi"):
     
     data_path = Path("data/")
     image_path = data_path/image_dir
