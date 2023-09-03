@@ -4,6 +4,7 @@ activate.sh
 Notebooks/Models/
 Datasets/
 Notebooks/data/
+Notebooks/demos/deploy/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
