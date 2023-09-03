@@ -1,3 +1,4 @@
+.env
 PyTorchEnv/
 activate.sh
 Notebooks/Models/
